@@ -23,12 +23,16 @@ else
 fi
 
 # PID of the main Claude process for this profile (helpers are not matched)
-pid="$(ps -axo pid=,args= | awk -v bin="$BIN" -v data="$DATA" '
+# Read the process list first: if awk stopped reading a live "ps |" pipe early,
+# ps would die of SIGPIPE and, with pipefail, the script would exit with 141.
+procs="$(ps -axo pid=,args=)"
+pid="$(printf '%s\n' "$procs" | awk -v bin="$BIN" -v data="$DATA" '
   { p = $1; $1 = ""; sub(/^ /, "") }
   index($0, bin) == 1 && (length($0) == length(bin) || substr($0, length(bin) + 1, 1) == " ") {
     has = index($0, "--user-data-dir=") > 0
-    if (data == "" && !has) { print p; exit }
-    if (data != "" && index($0, "--user-data-dir=" data) > 0) { print p; exit }
+    if (found) next
+    if (data == "" && !has) { print p; found = 1 }
+    if (data != "" && index($0, "--user-data-dir=" data) > 0) { print p; found = 1 }
   }')"
 
 if [ -n "$pid" ]; then
